@@ -109,16 +109,7 @@ function SingleMember() {
     <div className="container-fluid">
       <div className="row mb-2">
         <div className="col-sm-6">
-          <h1>Member Record <button
-            
-            className="btn btn-info"
-            style={{ borderRadius: 20, width: "20%" }}
-            type="button"
-            onClick={()=> window.print()}
-            
-            > Print Info 
-            
-            </button></h1>
+          <h1>Member Record </h1>
           
         </div>
         <div className="col-sm-6"></div>

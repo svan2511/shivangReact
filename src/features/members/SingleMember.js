@@ -188,7 +188,7 @@ function SingleMember() {
               aria-expanded="false"
               aria-controls="collapseExample"
               onClick={() => handleClickButton(installment._id)}
-              disabled={ new Date() < new Date(installment.due_date)  ||  installment.status === 1 }
+              disabled={ new Date() < new Date(installment.due_date)  ||  installment.status === 1 ||  installment.status === 2 }
             >
            <span style={{float: "inline-start"}}>( {index + 1} )</span>  
           { 
@@ -198,7 +198,7 @@ function SingleMember() {
 
           ( (openIDivId === installment._id && installment.status===2 )  || installment.status === 2 )
 
-          ? "Partially complete" :
+          ? "Remaining amount ₹" + installment.remain_amount + " is added to next installment"  :
            
            " Pay on "+changeDateFormat(installment.due_date)   }
           
@@ -206,6 +206,8 @@ function SingleMember() {
           { isOpenIDiv && openIDivId === installment._id && <div className="mycollasp" style={{ marginTop: 10,marginLeft: 0,width: "100%" }}>
              <form method="POST" onSubmit={handleSubmit(getAllData)}><div className="card card-body" >
               <input type="hidden" name="inst_id" id="inst_id" value={instId}  {...register("inst_id")}/>
+              <input type="hidden" name="member_id" id="member_id" value={installment.member_id}  {...register("member_id")}/>
+              <input type="hidden" name="inst_number" id="inst_number" value={index + 1}  {...register("inst_number")}/>
               {installment.status === 2 && <input type="hidden" value={installment.inst_amount} name="partialy_update" id="partialy_update" {...register("partialy_update")}/>}
                 <div className="form-group">
                   <label htmlFor="exampleInputEmail1">{installment.status === 0 ? "Installment Amount" : "Remaining Amount" }</label>

@@ -94,6 +94,10 @@ function Single() {
              <h3></h3>
            </div><Link to="/dashboard/add/center" className="btn btn-info btn-sm">
   Add New Center
+</Link> &nbsp;
+
+<Link to="/dashboard/add/member" className="btn btn-info btn-sm">
+  Add New Member
 </Link>
 
          </div>

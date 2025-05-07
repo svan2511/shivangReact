@@ -9,6 +9,7 @@ import AddCenter from './features/centers/AddCenter';
 import Single from './features/centers/Single';
 import AddMember from './features/members/Addmember';
 import SingleMember from './features/members/SingleMember';
+import VideoRecorder from './components/VideoRecorder';
 import './App.css'
 
 function AppRoutes() {
@@ -23,6 +24,7 @@ function AppRoutes() {
     { path: "center/:id", element: <Single /> },
     { path: "add/member", element: <AddMember /> },
     { path: "member/:id", element: <SingleMember /> },
+    { path: "member/video/:memberId", element: <VideoRecorder /> },
     ] },
     
   ]);

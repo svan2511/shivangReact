@@ -156,11 +156,11 @@ function Member() {
                        &nbsp;Details
                      </button>
                    </Link> &nbsp;
-                   <Link to={`/dashboard/member/video/${member._id}`}>
+                   {/* <Link to={`/dashboard/member/video/${member._id}`}>
                      <button type="button" className="btn btn-primary">
                        <i className="fas fa-video" /> &nbsp;Record Video
                      </button>
-                   </Link> &nbsp;
+                   </Link> &nbsp; */}
                    <a href="javascript:void(0)" onClick={() => handleDelete(member._id)}>
                      <button type="button" className="btn btn-danger">
                        <i className="fas fa-trash-alt" /> &nbsp;Delete

@@ -1,137 +1,75 @@
 import React, { useState, useRef, useEffect } from 'react';
+import 'webrtc-adapter'; // WebRTC polyfill for browser compatibility
 import './VideoRecorder.css';
 
 const VideoRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedVideo, setRecordedVideo] = useState(null);
   const [stream, setStream] = useState(null);
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [showAudioWarning, setShowAudioWarning] = useState(false);
   const [audioDevices, setAudioDevices] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const videoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
 
-  // Check permissions and list audio devices
+  // Check permissions and enumerate audio devices
   useEffect(() => {
     const checkPermissions = async () => {
       try {
-        const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
-        console.log('Microphone permission status:', permissionStatus.state);
+        const micPermission = await navigator.permissions.query({ name: 'microphone' });
+        const camPermission = await navigator.permissions.query({ name: 'camera' });
+        console.log('Microphone permission status:', micPermission.state);
+        console.log('Camera permission status:', camPermission.state);
+        if (micPermission.state === 'denied' || camPermission.state === 'denied') {
+          setErrorMessage('Camera or microphone access is denied. Please allow access in your browser settings.');
+        }
 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(device => device.kind === 'audioinput');
-        console.log('Available audio inputs:', audioInputs.map(device => ({
-          deviceId: device.deviceId,
-          label: device.label,
-          groupId: device.groupId
-        })));
+        console.log('Available audio inputs:', audioInputs.map(d => ({ label: d.label, deviceId: d.deviceId })));
+        if (audioInputs.length === 0) {
+          console.warn('No audio input devices found.');
+          setErrorMessage('No microphones detected. Please connect a microphone and refresh the page.');
+        }
         setAudioDevices(audioInputs);
-
         if (audioInputs.length > 0) {
           setSelectedDevice(audioInputs[0].deviceId);
         }
       } catch (error) {
-        console.error('Error checking permissions:', error);
+        console.error('Error checking permissions:', error.name, error.message);
+        setErrorMessage(`Error checking permissions: ${error.message}`);
       }
     };
-
     checkPermissions();
   }, []);
 
-  // Initialize camera and audio
+  // Initialize camera and microphone
   useEffect(() => {
     const initializeCamera = async () => {
       try {
-        // First get audio stream with specific constraints
-        const audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: selectedDevice ? { exact: selectedDevice } : undefined,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            channelCount: 1,
-            sampleRate: 44100,
-            latency: 0
-          }
+        console.log('Initializing media with audio deviceId:', selectedDevice);
+        // Simplified getUserMedia call
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: selectedDevice ? { deviceId: { exact: selectedDevice } } : true
         });
-
-        // Get video stream
-        const videoStream = await navigator.mediaDevices.getUserMedia({
-          video: true
-        });
-
-        // Log audio track details before combining
-        const audioTracks = audioStream.getAudioTracks();
-        console.log('Audio tracks before combining:', audioTracks.map(track => ({
-          enabled: track.enabled,
-          muted: track.muted,
-          readyState: track.readyState,
-          settings: track.getSettings(),
-          constraints: track.getConstraints()
+        console.log('Stream tracks:', stream.getTracks().map(t => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          muted: t.muted,
+          readyState: t.readyState,
+          label: t.label
         })));
 
-        // Combine streams
-        const combinedStream = new MediaStream([
-          ...audioStream.getAudioTracks(),
-          ...videoStream.getVideoTracks()
-        ]);
-
-        // Set up audio analysis
-        audioContextRef.current = new AudioContext();
-        const source = audioContextRef.current.createMediaStreamSource(audioStream);
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 1024;
-        analyserRef.current.smoothingTimeConstant = 0.3;
-        source.connect(analyserRef.current);
-
-        // Log audio track details after combining
-        const combinedAudioTracks = combinedStream.getAudioTracks();
-        console.log('Audio tracks after combining:', combinedAudioTracks.map(track => ({
-          enabled: track.enabled,
-          muted: track.muted,
-          readyState: track.readyState,
-          settings: track.getSettings(),
-          constraints: track.getConstraints()
-        })));
-
-        setStream(combinedStream);
+        setStream(stream);
         if (videoRef.current) {
-          videoRef.current.srcObject = combinedStream;
+          videoRef.current.srcObject = stream;
+          console.log('Video element srcObject set');
         }
-
-        // Monitor audio levels
-        const checkAudioLevel = () => {
-          if (analyserRef.current) {
-            const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-            analyserRef.current.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            setAudioLevel(average);
-            
-            if (average > 0) {
-              console.log('Audio detected:', {
-                level: average,
-                maxLevel: Math.max(...dataArray),
-                minLevel: Math.min(...dataArray),
-                timestamp: new Date().toISOString()
-              });
-            }
-          }
-        };
-        const audioInterval = setInterval(checkAudioLevel, 100);
-
-        return () => {
-          clearInterval(audioInterval);
-          if (audioContextRef.current) {
-            audioContextRef.current.close();
-          }
-        };
       } catch (error) {
-        console.error('Error accessing media devices:', error);
-        alert('Error accessing camera or microphone. Please make sure you have granted the necessary permissions and your microphone is not being used by another application.');
+        console.error('Media device error:', error.name, error.message, error.stack);
+        setErrorMessage(`Error accessing camera or microphone: ${error.message}`);
       }
     };
 
@@ -141,77 +79,85 @@ const VideoRecorder = () => {
 
     return () => {
       if (stream) {
+        console.log('Stopping stream tracks');
         stream.getTracks().forEach(track => track.stop());
       }
     };
   }, [selectedDevice]);
 
+  // Handle microphone selection
   const handleDeviceChange = (event) => {
+    console.log('Selected microphone device:', event.target.value);
     setSelectedDevice(event.target.value);
   };
 
+  // Start video recording
   const startRecording = () => {
-    if (!stream) return;
-
-    // Show warning if no audio is detected
-    if (audioLevel === 0) {
-      setShowAudioWarning(true);
-      const proceed = window.confirm('No audio input detected. Do you want to proceed with recording anyway?');
-      if (!proceed) {
-        return;
-      }
+    if (!stream) {
+      console.error('No stream available for recording');
+      setErrorMessage('Cannot start recording: No media stream available.');
+      return;
     }
 
+    console.log('Starting recording with stream tracks:', stream.getTracks());
     chunksRef.current = [];
-
-    // Create MediaRecorder with specific options
     const options = {
-      mimeType: 'video/webm;codecs=vp8,opus',
+      mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        ? 'video/webm;codecs=vp9,opus'
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        ? 'video/webm;codecs=vp8,opus'
+        : 'video/webm',
       audioBitsPerSecond: 128000,
       videoBitsPerSecond: 2500000
     };
+    console.log('MediaRecorder options:', options);
 
-    // Log available MIME types
-    console.log('Available MIME types:', MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'Supported' : 'Not supported');
+    try {
+      const mediaRecorder = new MediaRecorder(stream, options);
 
-    const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          console.log('Received chunk of size:', event.data.size);
+          chunksRef.current.push(event.data);
+        }
+      };
 
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        console.log('Received chunk of size:', event.data.size);
-        chunksRef.current.push(event.data);
-      }
-    };
+      mediaRecorder.onstop = () => {
+        console.log('Recording stopped, creating blob');
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        console.log('Blob size:', blob.size);
+        const videoURL = URL.createObjectURL(blob);
+        setRecordedVideo(videoURL);
+      };
 
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, {
-        type: 'video/webm'
-      });
-      console.log('Recording stopped. Final blob size:', blob.size);
-      const videoURL = URL.createObjectURL(blob);
-      setRecordedVideo(videoURL);
-      setShowAudioWarning(false);
-    };
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event.error.name, event.error.message);
+        setErrorMessage(`Recording error: ${event.error.message}`);
+      };
 
-    mediaRecorder.onerror = (event) => {
-      console.error('MediaRecorder error:', event);
-      alert('Error during recording. Please try again.');
-    };
-
-    mediaRecorderRef.current = mediaRecorder;
-    mediaRecorder.start(1000);
-    setIsRecording(true);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start(1000);
+      console.log('MediaRecorder started');
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting MediaRecorder:', error.name, error.message);
+      setErrorMessage(`Error starting recording: ${error.message}`);
+    }
   };
 
+  // Stop video recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      console.log('Stopping MediaRecorder');
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
   };
 
+  // Download recorded video
   const downloadVideo = () => {
     if (recordedVideo) {
+      console.log('Downloading video:', recordedVideo);
       const a = document.createElement('a');
       a.href = recordedVideo;
       a.download = `recorded-video-${Date.now()}.webm`;
@@ -221,9 +167,12 @@ const VideoRecorder = () => {
     }
   };
 
+  // Reset recording state
   const resetRecording = () => {
+    console.log('Resetting recording');
     setRecordedVideo(null);
     chunksRef.current = [];
+    setErrorMessage('');
   };
 
   return (
@@ -245,6 +194,12 @@ const VideoRecorder = () => {
         )}
       </div>
 
+      {errorMessage && (
+        <div className="error-message" style={{ color: 'red', margin: '10px 0' }}>
+          {errorMessage}
+        </div>
+      )}
+
       {audioDevices.length > 0 && (
         <div className="device-selector">
           <label htmlFor="audioDevice">Select Microphone:</label>
@@ -263,19 +218,14 @@ const VideoRecorder = () => {
         </div>
       )}
 
-      {showAudioWarning && (
-        <div className="audio-warning">
-          Warning: No audio input detected. Your recording may not include audio.
-        </div>
-      )}
-
       <div className="controls">
         {!isRecording && !recordedVideo && (
           <button
             onClick={startRecording}
             className="record-button"
+            disabled={!stream}
           >
-            Start Recording {audioLevel === 0 && '(No Audio Input)'}
+            Start Recording
           </button>
         )}
 
@@ -309,4 +259,4 @@ const VideoRecorder = () => {
   );
 };
 
-export default VideoRecorder; 
+export default VideoRecorder;
